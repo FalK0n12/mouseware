@@ -133,7 +133,7 @@ public class SuperCrafting {
             }
             case 3 -> {
                 ChatUtils.debug(client, "SuperCrafting: Done with " + currentItem + ". Closing GUI.");
-                client.setScreen(null);
+                screen.onClose();
                 lastActionTime = now;
                 guiOpenedAtMs = 0;
                 currentitemIndex++;
