@@ -10,7 +10,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.monster.Strider;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.AxeItem;
-import net.minecraft.client.MouseHandler;
+import net.minecraft.world.phys.EntityHitResult;
 
 public class StriderFishing {
     public static boolean running = false;
@@ -78,6 +78,17 @@ public class StriderFishing {
             if (client.player != null && client.player.fishing != null) {
                 client.gameMode.useItem(client.player, InteractionHand.MAIN_HAND);
             }
+        });
+    }
+
+    private static void attackLookedAtStrider(Minecraft client) {
+        client.execute(() -> {
+            if (client.player == null || client.gameMode == null) return;
+            if (!(client.hitResult instanceof EntityHitResult hitResult)) return;
+            if (!(hitResult.getEntity() instanceof Strider)) return;
+
+            client.gameMode.attack(client.player, hitResult.getEntity());
+            client.player.swing(InteractionHand.MAIN_HAND);
         });
     }
 
@@ -159,7 +170,8 @@ public class StriderFishing {
                 TimeUtils.sleep(50);
                 while (striderCount > 0 && running) {
                     ChatUtils.debug(client, "in attack loop");
-                    TimeUtils.sleep(500);
+                    attackLookedAtStrider(client);
+                    TimeUtils.sleep(100);
                 }
                 killingStriders = false;
             });
