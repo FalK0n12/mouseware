@@ -7,6 +7,8 @@ import org.lwjgl.glfw.GLFW;
 
 import java.io.*;
 import java.nio.file.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MacroConfig {
 
@@ -15,11 +17,15 @@ public class MacroConfig {
     public static boolean abilitySwap = false;
     public static int swapDelay = 50;
     public static int striderThreshold = 27;
+    public static boolean superCraftOnFullInventory = false;
+    public static boolean toggleMacro = false;
     public static boolean debug = false;
 
-    // Saved as GLFW key codes, defaulting to O and K
     public static int menuKey  = GLFW.GLFW_KEY_O;
     public static int macroKey = GLFW.GLFW_KEY_K;
+    public static int toggleMacroKey = GLFW.GLFW_KEY_K;
+
+    public static List<String> superCraftItems = new ArrayList<>();
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_FILE =
@@ -31,9 +37,13 @@ public class MacroConfig {
         boolean abilitySwap = false;
         int swapDelay = 50;
         int striderThreshold = 27;
+        boolean superCraftOnFullInventory = false;
+        boolean toggleMacro = false;
         boolean debug = false;
         int menuKey  = GLFW.GLFW_KEY_J;
         int macroKey = GLFW.GLFW_KEY_H;
+        int toggleMacroKey = GLFW.GLFW_KEY_K;
+        List<String> superCraftItems = new ArrayList<>();
     }
 
     public static void load() {
@@ -49,9 +59,13 @@ public class MacroConfig {
                 abilitySwap          = d.abilitySwap;
                 swapDelay            = d.swapDelay;
                 striderThreshold     = Math.max(1, Math.min(200, d.striderThreshold));
+                superCraftOnFullInventory = d.superCraftOnFullInventory;
+                toggleMacro          = d.toggleMacro;
                 debug                = d.debug;
                 menuKey              = d.menuKey;
                 macroKey             = d.macroKey;
+                toggleMacroKey       = d.toggleMacroKey;
+                if (d.superCraftItems != null) superCraftItems = d.superCraftItems;
             }
         } catch (IOException e) {
             System.err.println("[Mouseware] Failed to load config: " + e.getMessage());
@@ -66,9 +80,13 @@ public class MacroConfig {
             d.abilitySwap           = abilitySwap;
             d.swapDelay             = swapDelay;
             d.striderThreshold      = striderThreshold;
+            d.superCraftOnFullInventory = superCraftOnFullInventory;
+            d.toggleMacro           = toggleMacro;
             d.debug                 = debug;
             d.menuKey               = menuKey;
             d.macroKey              = macroKey;
+            d.toggleMacroKey        = toggleMacroKey;
+            d.superCraftItems       = superCraftItems;
             GSON.toJson(d, w);
         } catch (IOException e) {
             System.err.println("[Mouseware] Failed to save config: " + e.getMessage());
