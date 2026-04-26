@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "mouseware",
+  "version": "${version}",
+  "name": "Mouseware",
+  "description": "Advanced QOL Mod",
+  "authors": [
+    "FalK0n12"
+  ],
+  "contact": {
+    "homepage": "https://github.com/FalK0n12/mouseware",
+    "sources": "https://github.com/FalK0n12/mouseware"
+  },
+  "license": "MIT",
+  "icon": "assets/mouseware/icon.png",
+  "environment": "*",
+  "mixins": [
+    "mouseware.mixins.json"
+  ],
+  "entrypoints": {
+    "main": [
+      "com.mouseware.mod.Mouseware"
+    ],
+    "client": [
+      "com.mouseware.mod.MousewareClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "another-mod": "*"
+  }
+}
