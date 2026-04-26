@@ -1,7 +1,5 @@
 package com.mouseware.mod.modules;
 
-import org.lwjgl.glfw.GLFW;
-
 import com.mouseware.mod.MacroConfig;
 import com.mouseware.mod.util.ChatUtils;
 import com.mouseware.mod.util.TimeUtils;
@@ -10,7 +8,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.monster.Strider;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.AxeItem;
-import net.minecraft.client.MouseHandler;
 
 public class StriderFishing {
     public static boolean running = false;

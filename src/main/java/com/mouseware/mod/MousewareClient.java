@@ -4,6 +4,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mouseware.mod.gui.ClickGui;
 import com.mouseware.mod.modules.StriderFishing;
+import com.mouseware.mod.modules.SuperCrafting;
 import com.mouseware.mod.util.TimeUtils;
 
 import net.fabricmc.api.ClientModInitializer;
@@ -12,12 +13,14 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallba
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import org.lwjgl.glfw.GLFW;
 
@@ -36,13 +39,15 @@ public class MousewareClient implements ClientModInitializer {
 
     private static KeyMapping openGuiKey;
     private static KeyMapping startScriptKey;
+    private static KeyMapping toggleMacroKey;
 
     @Override
     public void onInitializeClient() {
         MacroConfig.load();
         TimeUtils.init();
+        MacroWorkerThread.getInstance().start();
 
-        Identifier categoryId = Identifier.fromNamespaceAndPath("mouseware", "main");
+        ResourceLocation categoryId = ResourceLocation.fromNamespaceAndPath("mouseware", "main");
         KeyMapping.Category category = new KeyMapping.Category(categoryId);
 
         openGuiKey = KeyBindingHelper.registerKeyBinding(
@@ -50,6 +55,9 @@ public class MousewareClient implements ClientModInitializer {
 
         startScriptKey = KeyBindingHelper.registerKeyBinding(
                 new KeyMapping("key/mouseware.start", MacroConfig.macroKey, category));
+
+        toggleMacroKey = KeyBindingHelper.registerKeyBinding(
+                new KeyMapping("key/mouseware.toggle_macro", MacroConfig.toggleMacroKey, category));
 
         // ── Client-side command registration ─────────────────────────────────
         // The mixin in ChatScreenMixin rewrites /mouseware -> /mouseware on send,
@@ -88,12 +96,52 @@ public class MousewareClient implements ClientModInitializer {
                                     StringArgumentType.getString(ctx, "key"));
                                 return 1;
                             })))
+                    .then(ClientCommandManager.literal("togglemacrokey")
+                        .then(ClientCommandManager.argument("key", StringArgumentType.word())
+                            .suggests(keySuggestions)
+                            .executes(ctx -> {
+                                handleDotCommand("/mouseware togglemacrokey " +
+                                    StringArgumentType.getString(ctx, "key"));
+                                return 1;
+                            })))
+                    .then(ClientCommandManager.literal("supercraft")
+                        .executes(ctx -> {
+                            Minecraft client = Minecraft.getInstance();
+                            if (MacroConfig.superCraftItems.isEmpty()) {
+                                print("§cNo items configured. Add them to §emouseware.json §cunder §esuperCraftItems§c.");
+                            } else if (SuperCrafting.isCrafting) {
+                                SuperCrafting.stop();
+                                print("SuperCrafting stopped.");
+                            } else {
+                                SuperCrafting.start(client);
+                                print("SuperCrafting started for §e" + MacroConfig.superCraftItems.size() + " §ritems.");
+                            }
+                            return 1;
+                        }))
             );
+        });
+
+        // ── Chat listener: trigger supercraft on "inventory full" ─────────────
+        ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
+            StringBuilder sb = new StringBuilder();
+            message.visit(text -> { sb.append(text); return java.util.Optional.empty(); });
+            String plain = sb.toString().toLowerCase();
+            Minecraft client = Minecraft.getInstance();
+            client.execute(() -> {
+                if ((plain.contains("inventory full") || plain.contains("your inventory is full")) && !SuperCrafting.isCrafting && MacroConfig.superCraftOnFullInventory) {
+                    if (!MacroConfig.superCraftItems.isEmpty() && client.player != null) {
+                        SuperCrafting.start(client, true);
+                        print("§eInventory full detected — SuperCrafting started.");
+                    }
+                }
+            });
         });
 
         // ── Tick handler ──────────────────────────────────────────────────────
         ClientTickEvents.START_CLIENT_TICK.register(client -> {
             if (client.player == null) return;
+
+            syncConfiguredKeys();
 
             while (openGuiKey.consumeClick())
                 client.setScreen(new ClickGui());
@@ -107,13 +155,19 @@ public class MousewareClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null) return;
             StriderFishing.update(client);
+
+            // SuperCrafting GUI handler
+            if (SuperCrafting.isCrafting && client.screen instanceof AbstractContainerScreen<?> screen) {
+                SuperCrafting.handleGui(client, screen);
+            }
         });
     }
 
     // ── Command logic ─────────────────────────────────────────────────────────
 
     private static void handleDotCommand(String message) {
-        // Expected format: "/mouseware menukey <key>" or "/mouseware startkey <key>"
+        // Expected format: "/mouseware menukey <key>", "/mouseware startkey <key>",
+        // or "/mouseware togglemacrokey <key>"
         String[] parts = message.split("\\s+");
         if (parts.length < 3) {
             printUsage();
@@ -123,7 +177,7 @@ public class MousewareClient implements ClientModInitializer {
         String sub = parts[1].toLowerCase();
         String keyArg = parts[2].toLowerCase();
 
-        if (!sub.equals("menukey") && !sub.equals("startkey")) {
+        if (!sub.equals("menukey") && !sub.equals("startkey") && !sub.equals("togglemacrokey") && !sub.equals("togglekey")) {
             printUsage();
             return;
         }
@@ -140,17 +194,49 @@ public class MousewareClient implements ClientModInitializer {
             KeyMapping.resetMapping();
             MacroConfig.save();
             print("Menu key set to §e" + keyArg.toUpperCase());
-        } else {
+        } else if (sub.equals("startkey")) {
             MacroConfig.macroKey = glfwKey;
             startScriptKey.setKey(InputConstants.Type.KEYSYM.getOrCreate(glfwKey));
             KeyMapping.resetMapping();
             MacroConfig.save();
             print("Macro key set to §e" + keyArg.toUpperCase());
+        } else {
+            MacroConfig.toggleMacroKey = glfwKey;
+            toggleMacroKey.setKey(InputConstants.Type.KEYSYM.getOrCreate(glfwKey));
+            KeyMapping.resetMapping();
+            MacroConfig.save();
+            print("Toggle Macro key set to §e" + keyArg.toUpperCase());
         }
     }
 
+    public static int getToggleMacroKey() {
+        if (toggleMacroKey == null) return MacroConfig.toggleMacroKey;
+        return InputConstants.getKey(toggleMacroKey.saveString()).getValue();
+    }
+
+    private static void syncConfiguredKeys() {
+        boolean changed = false;
+        int menuKey = InputConstants.getKey(openGuiKey.saveString()).getValue();
+        int macroKey = InputConstants.getKey(startScriptKey.saveString()).getValue();
+        int externalMacroKey = getToggleMacroKey();
+
+        if (MacroConfig.menuKey != menuKey) {
+            MacroConfig.menuKey = menuKey;
+            changed = true;
+        }
+        if (MacroConfig.macroKey != macroKey) {
+            MacroConfig.macroKey = macroKey;
+            changed = true;
+        }
+        if (MacroConfig.toggleMacroKey != externalMacroKey) {
+            MacroConfig.toggleMacroKey = externalMacroKey;
+            changed = true;
+        }
+        if (changed) MacroConfig.save();
+    }
+
     private static void printUsage() {
-        print("Usage: §e/mouseware menukey <key> §ror §e/mouseware startkey <key>");
+        print("Usage: §e/mouseware menukey <key> §r, §e/mouseware startkey <key> §ror §e/mouseware togglemacrokey <key>");
     }
 
     private static void print(String msg) {
